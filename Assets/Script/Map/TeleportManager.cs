@@ -50,20 +50,21 @@ public class TeleportManager : MonoBehaviour
     /// </summary>
     private void PrintBiomeInfo()
     {
-        if (mapManager == null || mapManager.biomes == null)
+        if (mapManager == null || (mapManager.biomes == null && mapManager.GetShuffledBiomes() == null))
         {
             Debug.LogWarning("[TeleportManager] MapManager 또는 Biome 정보가 없습니다.");
             return;
         }
+        var activeBiomes = GetActiveBiomeList();
 
         Debug.Log($"[TeleportManager] ========== Biome 정보 ==========");
         Debug.Log($"[TeleportManager] 전체 맵 크기: {mapManager.mapWidth} x {mapManager.mapHeight}");
-        Debug.Log($"[TeleportManager] Biome 개수: {mapManager.biomes.Count}");
+        Debug.Log($"[TeleportManager] Biome 개수: {activeBiomes.Count}");
 
-        for (int i = 0; i < mapManager.biomes.Count; i++)
+        for (int i = 0; i < activeBiomes.Count; i++)
         {
             BiomeBounds bounds = CalculateBiomeBounds(i);
-            Debug.Log($"[TeleportManager] Biome [{i}] \"{mapManager.biomes[i].name}\" - 범위: ({bounds.minX}, {bounds.minY}) ~ ({bounds.maxX}, {bounds.maxY})");
+            Debug.Log($"[TeleportManager] Biome [{i}] \"{activeBiomes[i].name}\" - 범위: ({bounds.minX}, {bounds.minY}) ~ ({bounds.maxX}, {bounds.maxY})");
         }
 
         Debug.Log($"[TeleportManager] ===================================");
@@ -82,13 +83,15 @@ public class TeleportManager : MonoBehaviour
             return;
         }
 
-        if (biomeIndex < 0 || biomeIndex >= mapManager.biomes.Count)
+        var activeBiomes = GetActiveBiomeList();
+
+        if (biomeIndex < 0 || biomeIndex >= activeBiomes.Count)
         {
             Debug.LogError($"[TeleportManager] 잘못된 Biome 인덱스: {biomeIndex}");
             return;
         }
 
-        string biomeName = mapManager.biomes[biomeIndex].name;
+        string biomeName = activeBiomes[biomeIndex].name;
         Debug.Log($"[TeleportManager] 🚀 순간이동 시작 - Biome [{biomeIndex}] \"{biomeName}\"");
 
         // Biome 영역 계산
@@ -133,12 +136,39 @@ public class TeleportManager : MonoBehaviour
     }
 
     /// <summary>
+    /// 플레이어를 선택한 Biome 이름으로 해당 Biome 내의 랜덤한 위치로 순간이동시킵니다.
+    /// </summary>
+    /// <param name="player">순간이동할 플레이어</param>
+    /// <param name="biomeName">목표 Biome의 이름</param>
+    public void TeleportToBiomeByName(GameObject player, string biomeName)
+    {
+        if (mapManager == null || mapManager.biomes == null)
+        {
+            Debug.LogError("[TeleportManager] MapManager 또는 Biome 목록이 없습니다.");
+            return;
+        }
+        // 섞인(또는 원본) 리스트에서 이름으로 Biome 인덱스 찾기
+        var activeBiomes = GetActiveBiomeList();
+        int biomeIndex = activeBiomes.FindIndex(b => b.name == biomeName);
+
+        if (biomeIndex != -1)
+        {
+            TeleportToRandomBiomePosition(player, biomeIndex);
+        }
+        else
+        {
+            Debug.LogError($"[TeleportManager] '{biomeName}'이라는 이름을 가진 Biome을 찾을 수 없습니다.");
+        }
+    }
+
+    /// <summary>
     /// Biome의 월드 좌표 범위를 계산합니다.
     /// MapManager의 GetBiomeForGridPosition 로직을 참고합니다.
     /// </summary>
     private BiomeBounds CalculateBiomeBounds(int biomeIndex)
     {
-        int biomeCount = mapManager.biomes.Count;
+        var activeBiomes = GetActiveBiomeList();
+        int biomeCount = activeBiomes.Count;
 
         // 그리드 차원 계산 (MapManager와 동일한 로직)
         int gridCols = Mathf.CeilToInt(Mathf.Sqrt(biomeCount));
@@ -226,9 +256,12 @@ public class TeleportManager : MonoBehaviour
     // 디버그용: Biome 영역을 시각화 (Scene 뷰에서만 보임)
     void OnDrawGizmos()
     {
-        if (mapManager == null || mapManager.biomes == null) return;
+        if (mapManager == null) return;
 
-        for (int i = 0; i < mapManager.biomes.Count; i++)
+        var activeBiomes = GetActiveBiomeList();
+        if (activeBiomes == null) return;
+
+        for (int i = 0; i < activeBiomes.Count; i++)
         {
             BiomeBounds bounds = CalculateBiomeBounds(i);
 
@@ -247,5 +280,15 @@ public class TeleportManager : MonoBehaviour
             Gizmos.color = new Color(Random.value, Random.value, Random.value, 0.3f);
             Gizmos.DrawWireCube(center, size);
         }
+    }
+
+    /// <summary>
+    /// MapManager에서 섞인 Biome 리스트를 반환합니다. 섞인 리스트가 없으면 원본 리스트를 반환합니다.
+    /// </summary>
+    private System.Collections.Generic.List<MapManager.Biome> GetActiveBiomeList()
+    {
+        var shuffled = mapManager.GetShuffledBiomes();
+        if (shuffled != null && shuffled.Count > 0) return shuffled;
+        return mapManager.biomes;
     }
 }
